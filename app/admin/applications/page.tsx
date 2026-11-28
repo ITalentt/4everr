@@ -9,16 +9,16 @@ import AdminLoading from "@/components/AdminLoading";
 // The applicant's details are stored on the application itself, so no join with profiles is needed.
 type Row = {
   id: string;
-  name: string;
-  email: string;
-  phone: string;
-  position: string;
-  city: string;
-  job_title: string;
-  company: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  position: string | null;
+  city: string | null;
+  job_title: string | null;
+  company: string | null;
   status: AppStatus;
   created_at: string;
-  cover: string;
+  cover: string | null;
 };
 
 const STATUSES: { v: AppStatus; label: string }[] = [
@@ -40,21 +40,60 @@ export default function AdminApplications() {
   const [filter, setFilter] = useState("ALL");
   const [sort, setSort] = useState("newest");
 
+  function filterRows(items: Row[]) {
+    const needle = query.trim().toLocaleLowerCase();
+    return items.filter((row) => (filter === "ALL" || row.status === filter)
+      && `${row.name ?? ""} ${row.email ?? ""} ${row.position ?? ""} ${row.job_title ?? ""} ${row.company ?? ""}`.toLocaleLowerCase().includes(needle))
+      .sort((a, b) => sort === "name" ? (a.name ?? "").localeCompare(b.name ?? "")
+        : sort === "vacancy" ? (a.job_title ?? "").localeCompare(b.job_title ?? "")
+        : sort === "oldest" ? a.created_at.localeCompare(b.created_at)
+        : b.created_at.localeCompare(a.created_at));
+  }
+
   const load = useCallback(async () => {
     setLoading(true);
-    let request = supabase()
-      .from("applications")
-      .select("id, name, email, phone, position, city, job_title, company, status, created_at, cover");
-    if (filter !== "ALL") request = request.eq("status", filter);
-    const safeQuery = query.trim().replace(/[^\p{L}\p{N}@._+\-\s]/gu, " ").replace(/\s+/g, " ");
-    if (safeQuery) request = request.or(`name.ilike.%${safeQuery}%,email.ilike.%${safeQuery}%,position.ilike.%${safeQuery}%,job_title.ilike.%${safeQuery}%,company.ilike.%${safeQuery}%`);
-    if (sort === "name") request = request.order("name", { ascending: true });
-    else if (sort === "vacancy") request = request.order("job_title", { ascending: true });
-    else request = request.order("created_at", { ascending: sort === "oldest" });
-    const { data, error } = await request;
-    setErr(error ? error.message : null);
-    setRows((data ?? []) as Row[]);
-    setLoading(false);
+    const client = supabase();
+    try {
+      const current = await client.from("applications")
+        .select("id, candidate_id, employer_id, job_id, resume_id, status, created_at, letter, job_title, company")
+        .order("created_at", { ascending: false });
+      if (current.error) throw current.error;
+      const applications = current.data ?? [];
+      const candidateIds = [...new Set(applications.map((row) => row.candidate_id).filter(Boolean))] as string[];
+      const resumeIds = [...new Set(applications.map((row) => row.resume_id).filter(Boolean))] as string[];
+      const [{ data: profiles }, { data: resumes }] = await Promise.all([
+        candidateIds.length ? client.from("profiles").select("id, name, email").in("id", candidateIds) : Promise.resolve({ data: [] }),
+        resumeIds.length ? client.from("resumes").select("id, title, content").in("id", resumeIds) : Promise.resolve({ data: [] }),
+      ]);
+      const profileMap = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
+      const resumeMap = new Map((resumes ?? []).map((resume) => [resume.id, resume]));
+      const mapped = applications.map((row) => {
+        const profile = profileMap.get(row.candidate_id);
+        const content = resumeMap.get(row.resume_id)?.content as Record<string, unknown> | null;
+        const resume = (key: string) => typeof content?.[key] === "string" ? content[key] as string : null;
+        return {
+          id: row.id, name: profile?.name ?? null, email: profile?.email ?? null,
+          phone: resume("phone"), position: resume("position") ?? resumeMap.get(row.resume_id)?.title ?? null,
+          city: resume("city"), job_title: row.job_title, company: row.company,
+          status: row.status as AppStatus, created_at: row.created_at,
+          cover: row.letter,
+        };
+      });
+      setRows(filterRows(mapped));
+      setErr(null);
+    } catch (currentError) {
+      // Older installations still have the original flat application columns.
+      const legacy = await client.from("applications")
+        .select("id, name, email, phone, position, city, job_title, company, status, created_at, cover")
+        .order("created_at", { ascending: false });
+      if (legacy.error) setErr((currentError as Error).message || legacy.error.message);
+      else {
+        setRows(filterRows((legacy.data ?? []) as Row[]));
+        setErr(null);
+      }
+    } finally {
+      setLoading(false);
+    }
   }, [filter, query, sort]);
 
   useEffect(() => { load(); }, [load]);
