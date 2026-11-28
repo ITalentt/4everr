@@ -181,17 +181,6 @@ export default function AdminUsers() {
         filters={<select className="inp min-w-0" value={roleFilter} onChange={(e) => { setRoleFilter(e.target.value); setPage(0); }} aria-label={t("Рөл бойынша сүзу|Фильтр по роли|Filter by role")}><option value="ALL">{t("Барлық рөл|Все роли|All roles")}</option>{Object.entries(ROLE_LABELS).map(([role, label]) => <option key={role} value={role}>{t(label)}</option>)}</select>}
       />
 
-      <div className="flex flex-wrap gap-2" role="tablist" aria-label={t("Аккаунт күйі|Статус аккаунта|Account status")}>
-        <button type="button" role="tab" aria-selected={view === "active"} className={`btn ${view === "active" ? "btn-p" : "btn-s"}`} onClick={() => { setView("active"); setPage(0); }}>
-          {t("Белсенді аккаунттар|Активные аккаунты|Active accounts")}
-        </button>
-        {archiveSupport !== "migration-required" && <button type="button" role="tab" aria-selected={view === "archived"} className={`btn ${view === "archived" ? "btn-p" : "btn-s"}`} onClick={() => { setView("archived"); setPage(0); }}>
-          {t("Мұрағат|Архив|Archived")}
-        </button>}
-      </div>
-
-      {archiveSupport === "migration-required" && <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-ink">{t("Аккаунттар тізімі көрсетіліп тұр. Мұрағаттау функциясын қосу үшін Supabase-тағы барлық жаңа migration файлдарын ретімен қолданыңыз.|Список аккаунтов отображается. Чтобы включить архивирование, примените все новые migration-файлы в Supabase по порядку.|The account list is available. Apply the new Supabase migrations in order to enable archiving.")}</p>}
-
       {err && <p role="alert" className="rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-500">{err}</p>}
       {isLoading && <AdminLoading />}
 

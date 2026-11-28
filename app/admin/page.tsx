@@ -5,10 +5,11 @@ import { useCallback, useEffect, useState } from "react";
 import AdminLoading from "@/components/AdminLoading";
 import { supabase } from "@/lib/supabase/client";
 import { useI18n } from "@/lib/i18n";
+import { loadAssessmentEntries } from "@/lib/assessments";
 import type { Role } from "@/lib/auth";
 
 type UserRow = { id: string; name: string; email: string; role: Role; banned: boolean; created_at: string };
-type Stat = { label: string; value: number; hint: string };
+type Stat = { label: string; value: number; hint: string; section: "users" | "site" };
 type Sort = "newest" | "oldest" | "name" | "role";
 const PAGE_SIZE = 20;
 const roleText: Record<Role, string> = {
@@ -50,27 +51,42 @@ export default function AdminDashboard() {
   const loadStats = useCallback(async () => {
     const db = supabase();
     const head = { count: "exact" as const, head: true };
-    const [allUsers, candidates, employers, verified, blockedUsers, pendingEmployers, activeVacancies, pendingVacancies, allApplications] = await Promise.all([
+    const [allUsers, candidates, employers, admins, verified, blockedUsers, newUsers, pendingEmployers, allVacancies, activeVacancies, pendingVacancies, allApplications, newApplications, directions, tests, surveys] = await Promise.all([
       db.from("profiles").select("id", head),
       db.from("profiles").select("id", head).eq("role", "CANDIDATE"),
       db.from("profiles").select("id", head).eq("role", "EMPLOYER"),
+      db.from("profiles").select("id", head).eq("role", "ADMIN"),
       db.from("profiles").select("id", head).eq("role", "EMPLOYER").eq("verified", true),
       db.from("profiles").select("id", head).eq("banned", true),
+      db.from("profiles").select("id", head).gte("created_at", new Date(Date.now() - 30 * 86400000).toISOString()),
       db.from("profiles").select("id", head).eq("role", "EMPLOYER").eq("verified", false).not("verification_requested_at", "is", null),
+      db.from("vacancies").select("id", head),
       db.from("vacancies").select("id", head).eq("status", "ACTIVE").eq("moderation", "APPROVED"),
       db.from("vacancies").select("id", head).eq("moderation", "PENDING"),
       db.from("applications").select("id", head),
+      db.from("applications").select("id", head).eq("status", "NEW"),
+      db.from("it_directions").select("id", head),
+      loadAssessmentEntries("test").catch(() => ({})),
+      loadAssessmentEntries("survey").catch(() => ({})),
     ]);
     const countOf = (result: { count: number | null; error: { message: string } | null }) => result.error ? 0 : result.count ?? 0;
+    const activeItems = (entries: Record<string, { enabled?: boolean }>) => Object.values(entries).filter((entry) => entry.enabled).length;
     setStats([
-      { label: "Тіркелген аккаунттар|Зарегистрированные аккаунты|Registered accounts", value: countOf(allUsers), hint: "Барлық рөлдер|Все роли|All roles" },
-      { label: "Кандидаттар|Кандидаты|Candidates", value: countOf(candidates), hint: "Кандидат рөлі|Роль кандидата|Candidate role" },
-      { label: "Жұмыс берушілер|Работодатели|Employers", value: countOf(employers), hint: `${countOf(verified)} · ${t("расталған|подтверждены|verified")}` },
-      { label: "Компанияны тексеру кезегі|Компании на проверке|Companies awaiting verification", value: countOf(pendingEmployers), hint: "Жұмыс беруші өтінімдері|Заявки работодателей|Employer requests" },
-      { label: "Бұғатталған аккаунттар|Заблокированные аккаунты|Blocked accounts", value: countOf(blockedUsers), hint: "Әкімші тексеруі қажет|Требуют внимания администратора|Need admin attention" },
-      { label: "Белсенді вакансиялар|Активные вакансии|Active vacancies", value: countOf(activeVacancies), hint: "Жарияланған|Опубликованные|Published" },
-      { label: "Тексерілетін вакансиялар|Вакансии на проверке|Vacancies awaiting review", value: countOf(pendingVacancies), hint: "Модерация кезегінде|В очереди модерации|In moderation queue" },
-      { label: "Өтінімдер|Заявки|Applications", value: countOf(allApplications), hint: "Барлық өтінімдер|Все заявки|All applications" },
+      { section: "users", label: "Тіркелген аккаунттар|Зарегистрированные аккаунты|Registered accounts", value: countOf(allUsers), hint: "Барлық рөлдер|Все роли|All roles" },
+      { section: "users", label: "Кандидаттар|Кандидаты|Candidates", value: countOf(candidates), hint: "Кандидат рөлі|Роль кандидата|Candidate role" },
+      { section: "users", label: "Жұмыс берушілер|Работодатели|Employers", value: countOf(employers), hint: `${countOf(verified)} · ${t("расталған|подтверждены|verified")}` },
+      { section: "users", label: "Әкімшілер|Администраторы|Administrators", value: countOf(admins), hint: "Әкімші рөлі|Роль администратора|Admin role" },
+      { section: "users", label: "30 күнде тіркелгендер|Зарегистрировались за 30 дней|Signed up in 30 days", value: countOf(newUsers), hint: "Жаңа аккаунттар|Новые аккаунты|New accounts" },
+      { section: "users", label: "Бұғатталған аккаунттар|Заблокированные аккаунты|Blocked accounts", value: countOf(blockedUsers), hint: "Қауіпсіздік күйі|Статус безопасности|Account security status" },
+      { section: "users", label: "Тексеруді күткен компаниялар|Компании на проверке|Employers awaiting review", value: countOf(pendingEmployers), hint: "Жұмыс беруші өтінімдері|Заявки работодателей|Employer requests" },
+      { section: "site", label: "Барлық вакансиялар|Всего вакансий|All vacancies", value: countOf(allVacancies), hint: "Сайтта сақталған|Сохранено на сайте|Stored on site" },
+      { section: "site", label: "Белсенді вакансиялар|Активные вакансии|Active vacancies", value: countOf(activeVacancies), hint: "Жарияланған|Опубликованные|Published" },
+      { section: "site", label: "Тексерілетін вакансиялар|Вакансии на проверке|Vacancies awaiting review", value: countOf(pendingVacancies), hint: "Модерация кезегінде|В очереди модерации|In moderation queue" },
+      { section: "site", label: "Барлық өтінімдер|Всего заявок|All applications", value: countOf(allApplications), hint: "Кандидаттардың өтінімдері|Отклики кандидатов|Candidate applications" },
+      { section: "site", label: "Жаңа өтінімдер|Новые заявки|New applications", value: countOf(newApplications), hint: "Қарауды күтуде|Ожидают рассмотрения|Awaiting review" },
+      { section: "site", label: "IT бағыттары|IT-направления|IT directions", value: countOf(directions), hint: "Сайттағы санаттар|Категории сайта|Site categories" },
+      { section: "site", label: "Белсенді тесттер|Активные тесты|Active tests", value: activeItems(tests as Record<string, { enabled?: boolean }>), hint: "Кандидаттарға арналған|Для кандидатов|For candidates" },
+      { section: "site", label: "Белсенді сауалнамалар|Активные опросы|Active surveys", value: activeItems(surveys as Record<string, { enabled?: boolean }>), hint: "Бағыт таңдауға арналған|Для выбора направления|For choosing a direction" },
     ]);
   }, [t]);
 
@@ -107,9 +123,13 @@ export default function AdminDashboard() {
       {error && <p role="alert" className="rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-500">{error}</p>}
       {(loading || statsLoading) && <AdminLoading />}
 
-      <section className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7" aria-label={t("Жалпы статистика|Общая статистика|Overall statistics")}>
-        {stats.map((item) => <article key={item.label} className="rounded-xl border border-line bg-sf p-3"><p className="text-xs leading-4 text-mute">{t(item.label)}</p><p className="mt-1 text-xl font-bold text-brand">{item.value.toLocaleString(locale)}</p><p className="mt-1 text-[11px] leading-4 text-mute">{t(item.hint)}</p></article>)}
-      </section>
+      {(["users", "site"] as const).map((section) => {
+        const items = stats.filter((item) => item.section === section);
+        return <section key={section} className="grid gap-2" aria-label={t(section === "users" ? "Қолданушылар статистикасы|Статистика пользователей|User statistics" : "Сайт статистикасы|Статистика сайта|Site statistics")}>
+          <h2 className="text-lg font-semibold text-ink">{t(section === "users" ? "Қолданушылар статистикасы|Статистика пользователей|User statistics" : "Сайт статистикасы|Статистика сайта|Site statistics")}</h2>
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">{items.map((item) => <article key={item.label} className="rounded-xl border border-line bg-sf p-3"><p className="text-xs leading-4 text-mute">{t(item.label)}</p><p className="mt-1 text-xl font-bold text-brand">{item.value.toLocaleString(locale)}</p><p className="mt-1 text-[11px] leading-4 text-mute">{t(item.hint)}</p></article>)}</div>
+        </section>;
+      })}
 
       <section className="grid gap-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
