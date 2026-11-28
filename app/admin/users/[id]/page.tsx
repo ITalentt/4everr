@@ -40,7 +40,6 @@ export default function AdminUserDetails() {
   const [roleDraft, setRoleDraft] = useState<Exclude<Role, "ADMIN">>("CANDIDATE");
   const [roleSaved, setRoleSaved] = useState(false);
   const [stats, setStats] = useState<Stat[]>([]);
-  const [archiveSchemaReady, setArchiveSchemaReady] = useState(true);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -53,11 +52,17 @@ export default function AdminUserDetails() {
     let error = full.error;
     if (error?.code === "42703" || error?.code === "PGRST204") {
       const withoutArchive = await db.from("profiles")
-        .select("id, name, email, role, banned, verified, created_at, phone, city, company_name, company_about, contact_phone, bin")
+        .select("id, name, email, role, banned, verified, created_at, city, company_name, company_about, contact_phone, bin")
         .eq("id", id).maybeSingle();
       data = withoutArchive.data as Record<string, unknown> | null;
       error = withoutArchive.error;
-      if (!error) setArchiveSchemaReady(false);
+      if (error?.code === "42703" || error?.code === "PGRST204") {
+        const minimum = await db.from("profiles")
+          .select("id, name, email, role, banned, created_at")
+          .eq("id", id).maybeSingle();
+        data = minimum.data as Record<string, unknown> | null;
+        error = minimum.error;
+      }
     }
     if (error) setErr(error.message);
     else if (!data) setErr(t("Аккаунт табылмады.|Аккаунт не найден.|Account not found."));
@@ -178,8 +183,6 @@ export default function AdminUserDetails() {
           {profile.archived_at ? t("Мұрағатта|В архиве|Archived") : profile.banned ? t("Бұғатталған|Заблокирован|Blocked") : t("Белсенді|Активен|Active")}
         </span>
       </header>
-      {!archiveSchemaReady && <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-ink">{t("Профиль ашылды. Мұрағаттау функциясын қосу үшін Supabase-тегі миграцияларды ретімен орындаңыз.|Профиль открыт. Чтобы включить архивацию, примените миграции Supabase по порядку.|Profile loaded. Apply the Supabase migrations in order to enable archiving.")}</p>}
-
       <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3" aria-label={t("Аккаунт статистикасы|Статистика аккаунта|Account statistics")}>
         {stats.map((item) => <article key={item.label} className="rounded-2xl border border-line bg-sf p-4"><p className="text-sm text-mute">{t(item.label)}</p><p className="mt-2 text-2xl font-bold text-brand">{item.value.toLocaleString()}</p></article>)}
       </section>

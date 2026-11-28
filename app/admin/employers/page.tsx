@@ -26,7 +26,6 @@ export default function AdminEmployers() {
   const [references, setReferences] = useState<Record<string, string>>({});
   const [notes, setNotes] = useState<Record<string, string>>({});
   const [verificationSchemaReady, setVerificationSchemaReady] = useState(true);
-  const [companySchemaReady, setCompanySchemaReady] = useState(true);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<EmployerFilter>("ALL");
@@ -41,7 +40,6 @@ export default function AdminEmployers() {
       .eq("role", "EMPLOYER").order("verification_requested_at", { ascending: false, nullsFirst: false });
     if (!error) {
       setVerificationSchemaReady(true);
-      setCompanySchemaReady(true);
       setRows((data ?? []) as Employer[]);
       setLoading(false);
       return;
@@ -54,7 +52,6 @@ export default function AdminEmployers() {
         .eq("role", "EMPLOYER").order("created_at", { ascending: false });
       if (!companyFallback.error) {
         setVerificationSchemaReady(false);
-        setCompanySchemaReady(true);
         setRows((companyFallback.data ?? []).map((row) => ({
           ...row,
           verification_requested_at: null, verification_reference: null, verification_notes: null,
@@ -67,7 +64,6 @@ export default function AdminEmployers() {
         .eq("role", "EMPLOYER").order("created_at", { ascending: false });
       if (!coreCompanyFallback.error) {
         setVerificationSchemaReady(false);
-        setCompanySchemaReady(true);
         setRows((coreCompanyFallback.data ?? []).map((row) => ({
           ...row, company_industry: null, company_website: null,
           verification_requested_at: null, verification_reference: null, verification_notes: null,
@@ -80,7 +76,6 @@ export default function AdminEmployers() {
         .eq("role", "EMPLOYER").order("created_at", { ascending: false });
       if (!fallback.error) {
         setVerificationSchemaReady(false);
-        setCompanySchemaReady(false);
         setRows((fallback.data ?? []).map((row) => ({
           ...row, verified: false, company_name: null, company_logo: null, company_about: null,
           contact_phone: null, bin: null, city: null, company_industry: null, company_website: null,
@@ -136,7 +131,6 @@ export default function AdminEmployers() {
     <div className="grid gap-4">
       <header><h1 className="text-2xl font-bold text-ink">{t("Жұмыс берушілер|Работодатели|Employers")} ({rows.length})</h1><p className="mt-1 text-sm text-mute">{t("Тексеруді күтіп тұрғаны|Ожидают проверки|Awaiting review")}: {requested}</p></header>
       {err && <p role="alert" className="rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-500">{err}</p>}
-      {!verificationSchemaReady && <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-ink">{t("Жұмыс берушілер тізімі көрсетілді. Растау деректері мен әрекеттері үшін Supabase миграцияларын атауы бойынша ретімен орындаңыз.|Список работодателей показан. Чтобы включить проверку компаний и действия, примените миграции Supabase по порядку.|The employer list is available. Apply the Supabase migrations in filename order to enable verification details and actions.")}</p>}
       <AdminListToolbar search={query} onSearch={setQuery} placeholder="Компания, аты немесе email бойынша іздеу|Поиск по компании, имени или email|Search company, name or email" sort={sort} onSort={setSort} sortOptions={[{ value: "request", label: "Өтінім күні|Дата заявки|Request date" }, { value: "name", label: "Компания аты|Название компании|Company name" }, { value: "email", label: "Email" }]} filters={<select className="inp min-w-0" value={filter} onChange={(e) => setFilter(e.target.value as EmployerFilter)} aria-label={t("Күй бойынша сүзу|Фильтр по статусу|Filter by status")}><option value="ALL">{t("Барлығы|Все|All")}</option><option value="PENDING">{t("Тексеруде|На проверке|Pending")}</option><option value="VERIFIED">{t("Расталған|Подтверждённые|Verified")}</option><option value="UNVERIFIED">{t("Расталмаған|Не подтверждены|Unverified")}</option><option value="BLOCKED">{t("Бұғатталған|Заблокированные|Blocked")}</option></select>} />
       {loading && <AdminLoading />}
       <div className="grid gap-4">
