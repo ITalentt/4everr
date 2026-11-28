@@ -37,9 +37,9 @@ function validate(kind: AssessmentKind, value: Assessment): string | null {
   return null;
 }
 
-export default function AdminAssessments({ editorOnly = false }: { editorOnly?: boolean }) {
+export default function AdminAssessments({ editorOnly = false, initialKind, initialId }: { editorOnly?: boolean; initialKind?: AssessmentKind; initialId?: string }) {
   const { t } = useI18n();
-  const [kind, setKind] = useState<AssessmentKind>("test");
+  const [kind, setKind] = useState<AssessmentKind>(initialKind ?? "test");
   const [entries, setEntries] = useState<AssessmentEntries>({});
   const [selected, setSelected] = useState<string | null>(null);
   const [id, setId] = useState("");
@@ -78,7 +78,8 @@ export default function AdminAssessments({ editorOnly = false }: { editorOnly?: 
   function create() {
     setSelected(null); setId(""); setDraft(kind === "test" ? emptyTest() : emptySurvey()); setErr(""); setNotice("");
   }
-  useEffect(() => { if (editorOnly) { const timer = window.setTimeout(create, 0); return () => window.clearTimeout(timer); } }, [editorOnly]);
+  useEffect(() => { if (editorOnly && !initialId) { const timer = window.setTimeout(create, 0); return () => window.clearTimeout(timer); } }, [editorOnly, initialId]);
+  useEffect(() => { if (initialId && entries[initialId]) choose(initialId); }, [initialId, entries]);
   function setName(name: string) { setDraft((current) => current ? { ...current, name } as Assessment : current); }
   function updateTest(update: (value: Test) => Test) {
     setDraft((current) => current && "dirs" in current === false ? update(current) : current);
@@ -124,12 +125,12 @@ export default function AdminAssessments({ editorOnly = false }: { editorOnly?: 
         <Link href="/admin/assessments/new" className="btn btn-p w-fit"><FiPlus className="mr-1 inline" />{t("Тест немесе сауалнама қосу|Добавить тест или опрос|Add test or survey")}</Link>
         <AdminListToolbar search={query} onSearch={setQuery} placeholder="ID немесе атауы бойынша іздеу|Поиск по ID или названию|Search by ID or title" sort={sort} onSort={setSort} sortOptions={[{ value: "id", label: "ID бойынша|По ID|By ID" }, { value: "name", label: "Атауы бойынша|По названию|By name" }]} filters={<select className="inp min-w-0" value={enabledFilter} onChange={(e) => setEnabledFilter(e.target.value)} aria-label={t("Көріну күйі|Статус публикации|Visibility")}><option value="ALL">{t("Барлығы|Все|All")}</option><option value="VISIBLE">{t("Көрсетіліп тұр|Опубликовано|Visible")}</option><option value="HIDDEN">{t("Жасырылған|Скрыто|Hidden")}</option></select>} />
         {busy && <AdminLoading />}
-        <div className="grid gap-2">{rows.map(([itemId, entry]) => <button type="button" key={itemId} onClick={() => choose(itemId)} className={`card p-4 text-left hover:bg-soft ${selected === itemId ? "border-brand" : ""}`}><span className="flex items-center justify-between gap-2"><code className="text-xs text-mute">{itemId}</code><span className={`chip ${entry.enabled ? "c-ok" : "c-w"}`}>{t(entry.enabled ? "Көрсетіліп тұр|Опубликовано|Visible" : "Жасырылған|Скрыто|Hidden")}</span></span><span className="mt-1 block font-semibold">{t(entry.payload.name)}</span><span className="text-xs text-mute">{entry.payload.q.length} {t("сұрақ|вопросов|questions")}</span></button>)}
+        <div className="grid gap-2">{rows.map(([itemId, entry]) => <Link href={`/admin/assessments/${kind}/${itemId}`} key={itemId} className="card p-4 text-left hover:bg-soft"><span className="flex items-center justify-between gap-2"><code className="text-xs text-mute">{itemId}</code><span className={`chip ${entry.enabled ? "c-ok" : "c-w"}`}>{t(entry.enabled ? "Көрсетіліп тұр|Опубликовано|Visible" : "Жасырылған|Скрыто|Hidden")}</span></span><span className="mt-1 block font-semibold">{t(entry.payload.name)}</span><span className="text-xs text-mute">{entry.payload.q.length} {t("сұрақ|вопросов|questions")}</span></Link>)}
           {!rows.length && !busy && !err && <p className="card p-4 text-sm text-mute">{t("Материал табылмады.|Материалы не найдены.|No items found.")}</p>}</div>
       </section>}
 
-      <section className="card grid content-start gap-4 p-5">
-        {editorOnly && <div className="flex flex-wrap items-center justify-between gap-3"><Link href="/admin/assessments" className="text-sm text-mute underline">‹ {t("Тесттер мен сауалнамалар тізімі|К списку тестов и опросов|Back to tests & surveys")}</Link><div className="flex gap-2">{(["test", "survey"] as AssessmentKind[]).map((value) => <button key={value} type="button" aria-pressed={kind === value} onClick={() => changeKind(value)} className={`btn ${kind === value ? "btn-p" : "btn-s"}`}>{value === "test" ? t("Тест|Тест|Test") : t("Сауалнама|Опрос|Survey")}</button>)}</div></div>}
+      {editorOnly && <section className="card grid content-start gap-4 p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3"><Link href="/admin/assessments" className="text-sm text-mute underline">‹ {t("Тесттер мен сауалнамалар тізімі|К списку тестов и опросов|Back to tests & surveys")}</Link>{!initialId && <div className="flex gap-2">{(["test", "survey"] as AssessmentKind[]).map((value) => <button key={value} type="button" aria-pressed={kind === value} onClick={() => changeKind(value)} className={`btn ${kind === value ? "btn-p" : "btn-s"}`}>{value === "test" ? t("Тест|Тест|Test") : t("Сауалнама|Опрос|Survey")}</button>)}</div>}</div>
         {editorOnly && busy && <AdminLoading />}
         <h2 className="text-lg font-bold">{selected ? t("Материалды өңдеу|Редактировать материал|Edit item") : t(editorOnly ? "Жаңа тест немесе сауалнама|Новый тест или опрос|New test or survey" : "Материалды өңдеу|Редактировать материал|Edit item")}</h2>
         {!draft ? <p className="text-sm text-mute">{t("Тізімнен материал таңдаңыз немесе жаңасын қосыңыз.|Выберите материал из списка или добавьте новый.|Select an item or add a new one.")}</p> : <>
@@ -154,7 +155,7 @@ export default function AdminAssessments({ editorOnly = false }: { editorOnly?: 
         {err && <p role="alert" className="rounded-xl bg-red-500/10 px-4 py-3 text-sm text-red-500">{err}</p>}
         {notice && <p role="status" className="rounded-xl bg-brand/10 px-4 py-3 text-sm text-brand">{notice}</p>}
         <div className="flex flex-wrap gap-2">{draft && <button type="button" className="btn btn-p" disabled={busy} onClick={save}>{t("Сақтау|Сохранить|Save")}</button>}{selected && draft && entries[selected] && <button type="button" className="btn btn-s" disabled={busy} onClick={() => setEnabled(!entries[selected].enabled)}>{entries[selected].enabled ? <><FiTrash2 className="mr-1 inline" />{t("Сайттан жасыру|Скрыть на сайте|Hide from site")}</> : <><FiRotateCcw className="mr-1 inline" />{t("Қайта қосу|Восстановить|Restore")}</>}</button>}</div>
-      </section>
+      </section>}
     </div>
   );
 }

@@ -57,7 +57,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           <span className={`whitespace-nowrap text-sm font-bold text-ink transition-opacity ${expanded ? "opacity-100" : "opacity-0"}`}>{t("Әкімші панелі|Панель администратора|Admin panel")}</span>
         </div>
 
-        <nav className="mt-3 grid gap-1" aria-label={t("Әкімші мәзірі|Меню администратора|Admin navigation")}>
+        <nav className="mt-3 grid min-h-0 flex-1 content-start gap-1 overflow-y-auto" aria-label={t("Әкімші мәзірі|Меню администратора|Admin navigation")}>
           {NAV.map(({ href, label, icon: Icon, exact }) => {
             const active = exact ? path === href : path === href || path.startsWith(`${href}/`);
             return (
